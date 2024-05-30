@@ -1,10 +1,18 @@
-import socket
+import asyncio
+
+HOST = "localhost"
+PORT = 6379
 
 
-def main():
-    server_socket = socket.create_server(("localhost", 6379), reuse_port=True)
-    server_socket.accept() # wait for client
+async def handler(reader, writer):
+    writer.write("+PONG\r\n".encode())
+    await writer.drain()
+
+
+async def main():
+    server = await asyncio.start_server(handler, host=HOST, port=PORT)
+    await server.serve_forever()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
