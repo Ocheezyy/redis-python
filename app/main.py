@@ -1,11 +1,23 @@
 import asyncio
+from asyncio.streams import StreamReader, StreamWriter
 
 HOST = "localhost"
 PORT = 6379
+CRLF = "\r\n"
+PONG = f"+PONG{CRLF}"
+
+REDIS_SIG = f"*1{CRLF}$4{CRLF}"
+PING = f"{REDIS_SIG}PING{CRLF}"
 
 
-async def handler(reader, writer):
-    writer.write("+PONG\r\n".encode())
+async def handler(reader: StreamReader, writer: StreamWriter):
+    response = ""
+    request = await reader.read(1024)
+    print(request)
+    if PING in request.decode():
+        print("ping in request")
+        writer.write(PONG.encode())
+
     await writer.drain()
 
 
