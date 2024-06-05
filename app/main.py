@@ -1,11 +1,16 @@
 import asyncio
+from typing import Any
 
 HOST = "localhost"
 PORT = 6379
 CRLF = "\r\n"
 NULL_BULK_STRING = f"$-1{CRLF}"
 
-MASTER_STORE = {}
+MASTER_STORE: dict[str, Any] = {}
+
+async def expire_key(store_key: str, exp_time: int):
+    await asyncio.sleep(exp_time / 1000)
+    MASTER_STORE.pop(store_key)
 
 
 def redis_ping() -> bytes:
@@ -24,6 +29,10 @@ def redis_set(req_arr: list[str]) -> bytes:
     req_key: str = req_arr[4]
     req_val: str = req_arr[6]
     MASTER_STORE[req_key] = req_val
+
+    if len(req_arr) > 8 and req_arr[8].lower() == "px":
+        exp_time = int(req_arr[10])
+        asyncio.create_task(coro=expire_key(req_key, exp_time))
     return redis_encode("+OK")
 
 
