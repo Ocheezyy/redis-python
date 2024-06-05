@@ -9,6 +9,24 @@ NULL_BULK_STRING = f"$-1{CRLF}"
 
 MASTER_STORE: dict[str, Any] = {}
 
+REPLICATION_INFO: dict[str, Any] = {
+    "role": "master",
+    "connected_slaves": 0,
+    "master_replid": "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+    "master_repl_offset": 0,
+    "second_repl_offset": -1,
+    "repl_backlog_active": 0,
+    "repl_backlog_size": 1048576,
+    "repl_backlog_first_byte_offset": 0,
+    "repl_backlog_histlen": "",
+}
+
+
+def get_replication_info_lst():
+    global REPLICATION_INFO
+    return [f"{k}:{v}" for k, v in REPLICATION_INFO.items()]
+
+
 async def expire_key(store_key: str, exp_time: int):
     await asyncio.sleep(exp_time / 1000)
     MASTER_STORE.pop(store_key)
@@ -35,6 +53,12 @@ def redis_set(req_arr: list[str]) -> bytes:
         exp_time = int(req_arr[10])
         asyncio.create_task(coro=expire_key(req_key, exp_time))
     return redis_encode("+OK")
+
+
+def redis_info(req_arr: list[str]) -> bytes:
+    if len(req_arr) >= 5 and req_arr[4].lower() == "replication":
+        return redis_encode(CRLF.join(get_replication_info_lst()))
+    return b""
 
 
 def redis_get(req_arr: list[str]) -> bytes:
@@ -86,6 +110,8 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
             response = redis_set(req_arr)
         elif req_arr[2].lower() == "get":
             response = redis_get(req_arr)
+        elif req_arr[2].lower() == "info":
+            response = redis_info(req_arr)
         else:
             return
 
@@ -96,6 +122,7 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
 
 
 async def run_server():
+    # print(get_replication_info_lst())
     parser = ArgumentParser("Redis Python")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     input_args = parser.parse_args()
