@@ -1,8 +1,9 @@
 import asyncio
 from typing import Any
+from argparse import ArgumentParser
 
 HOST = "localhost"
-PORT = 6379
+DEFAULT_PORT = 6379
 CRLF = "\r\n"
 NULL_BULK_STRING = f"$-1{CRLF}"
 
@@ -95,7 +96,10 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
 
 
 async def run_server():
-    server = await asyncio.start_server(handle_client, HOST, PORT)
+    parser = ArgumentParser("Redis Python")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    input_args = parser.parse_args()
+    server = await asyncio.start_server(handle_client, HOST, input_args.port)
     async with server:
         await server.serve_forever()
 
