@@ -1,21 +1,45 @@
 import asyncio
-from asyncio.streams import StreamWriter
 
 HOST = "localhost"
 PORT = 6379
 CRLF = "\r\n"
-PONG = f"+PONG{CRLF}"
+NULL_BULK_STRING = f"$-1{CRLF}"
+
+MASTER_STORE = {}
 
 
 def redis_ping() -> bytes:
-    return redis_encode("PONG")
+    """Server health check for redis cli (ping -> pong)"""
+    return redis_encode("+PONG")
 
 
 def redis_echo(req_arr: list[str]) -> bytes:
+    """Echo a redis cli request"""
     return redis_encode([el for el in req_arr[4:5]])
 
 
+def redis_set(req_arr: list[str]) -> bytes:
+    """Set a KV pair in the redis store"""
+    global MASTER_STORE
+    req_key: str = req_arr[4]
+    req_val: str = req_arr[6]
+    MASTER_STORE[req_key] = req_val
+    return redis_encode("+OK")
+
+
+def redis_get(req_arr: list[str]) -> bytes:
+    """Retrieve a value for a key in the redis store"""
+    global MASTER_STORE
+    req_key = req_arr[4]
+    if not req_key or req_key not in MASTER_STORE:
+        return NULL_BULK_STRING.encode()
+    return redis_encode(MASTER_STORE[req_key])
+
+
 def redis_encode(data, encoding="utf-8"):
+    """Encode a reponse for redis cli"""
+    if isinstance(data, str) and data.startswith("+"):
+        return f"{data}{CRLF}".encode()
     if not isinstance(data, list):
         data = [data]
     size = len(data)
@@ -30,6 +54,7 @@ def redis_encode(data, encoding="utf-8"):
 
 
 async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    """async request handler for redis requests"""
     request = ""
     while request != 'quit':
         request: str = (await reader.read(255)).decode()
@@ -47,6 +72,10 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
             response = redis_ping()
         elif req_arr[2].lower() == "echo":
             response = redis_echo(req_arr)
+        elif req_arr[2].lower() == "set":
+            response = redis_set(req_arr)
+        elif req_arr[2].lower() == "get":
+            response = redis_get(req_arr)
         else:
             return
 
