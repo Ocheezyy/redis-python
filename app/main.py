@@ -1,4 +1,5 @@
 import asyncio
+import socket
 from typing import Any, Optional
 from argparse import ArgumentParser, Namespace
 
@@ -109,6 +110,10 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
             response = redis_get(req_arr)
         elif req_arr[2].lower() == "info":
             response = redis_info(req_arr)
+        elif req_arr[2].lower() == "replconf":
+            response = b""
+        elif req_arr[2].lower() == "psync":
+            response = b""
         else:
             return
 
@@ -128,6 +133,13 @@ def build_replication_info(input_args: Namespace) -> None:
     else:
         master_addr, master_port = input_args.replicaof.split(" ")
         replication_info["role"] = "slave"
+        master_handshake(master_addr, int(master_port))
+
+
+def master_handshake(master_addr: str, master_port: int):
+    master_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    master_sock.connect((master_addr, master_port))
+    master_sock.send(f"*1{CRLF}$4{CRLF}PING{CRLF}".encode())
 
 
 async def run_server():
