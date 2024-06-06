@@ -10,10 +10,7 @@ NULL_BULK_STRING = f"$-1{CRLF}"
 MASTER_STORE: dict[str, Any] = {}
 
 replication_info: dict[str, Any] = {
-    "role": "master",
     "connected_slaves": 0,
-    "master_replid": "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-    "master_repl_offset": 0,
     "second_repl_offset": -1,
     "repl_backlog_active": 0,
     "repl_backlog_size": 1048576,
@@ -125,6 +122,9 @@ def build_replication_info(input_args: Namespace) -> None:
     global replication_info
     if input_args.replicaof == "master":
         replication_info["role"] = "master"
+        # Generate master replid here in future
+        replication_info["master_replid"] = "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb"
+        replication_info["master_repl_offset"] = 0
     else:
         master_addr, master_port = input_args.replicaof.split(" ")
         replication_info["role"] = "slave"
