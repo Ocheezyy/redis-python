@@ -123,7 +123,7 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
     writer.close()
 
 
-def build_replication_info(input_args: Namespace) -> None:
+async def build_replication_info(input_args: Namespace) -> None:
     global replication_info
     if input_args.replicaof == "master":
         replication_info["role"] = "master"
@@ -133,13 +133,32 @@ def build_replication_info(input_args: Namespace) -> None:
     else:
         master_addr, master_port = input_args.replicaof.split(" ")
         replication_info["role"] = "slave"
-        master_handshake(master_addr, int(master_port))
+        await master_handshake(master_addr, int(master_port), int(input_args.port))
 
 
-def master_handshake(master_addr: str, master_port: int):
-    master_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    master_sock.connect((master_addr, master_port))
-    master_sock.send(f"*1{CRLF}$4{CRLF}PING{CRLF}".encode())
+async def master_handshake(master_addr: str, master_port: int, slave_port: int):
+    # Create socket connection to master
+    master_reader, master_writer = await asyncio.open_connection(master_addr, master_port)
+
+    # Ping the master
+    master_writer.write(f"*1{CRLF}$4{CRLF}PING{CRLF}".encode())
+    master_ping_res = await master_reader.read(512)
+    if master_ping_res != redis_encode("+PONG"):
+        raise Exception(f"Failed to handshake with master (PING): {master_ping_res}")
+
+    # Send listening port
+    master_writer.write(redis_encode(["REPLCONF", "listening-port", str(slave_port)]))
+    replconf_port_res = await master_reader.read(1024)
+    if replconf_port_res != redis_encode("+OK"):
+        raise Exception(f"Failed to handshake with master (listen port declaration): {replconf_port_res}")
+
+    # Send capabilities
+    master_writer.write(redis_encode(["REPLCONF", "capa", "psync2"]))
+    replconf_capa_res = await master_reader.read(1024)
+    if replconf_capa_res != redis_encode("+OK"):
+        raise Exception(f"Failed to handshake with master (capa declaration): {replconf_capa_res}")
+
+    master_writer.close()
 
 
 async def run_server():
@@ -148,7 +167,7 @@ async def run_server():
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--replicaof", type=str, default="master")
     input_args = parser.parse_args()
-    build_replication_info(input_args)
+    await build_replication_info(input_args)
 
     server = await asyncio.start_server(handle_client, HOST, input_args.port)
     async with server:
