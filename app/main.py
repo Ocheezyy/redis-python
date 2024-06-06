@@ -1,6 +1,6 @@
 import asyncio
-from typing import Any
-from argparse import ArgumentParser
+from typing import Any, Optional
+from argparse import ArgumentParser, Namespace
 
 HOST = "localhost"
 DEFAULT_PORT = 6379
@@ -9,7 +9,7 @@ NULL_BULK_STRING = f"$-1{CRLF}"
 
 MASTER_STORE: dict[str, Any] = {}
 
-REPLICATION_INFO: dict[str, Any] = {
+replication_info: dict[str, Any] = {
     "role": "master",
     "connected_slaves": 0,
     "master_replid": "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
@@ -23,8 +23,8 @@ REPLICATION_INFO: dict[str, Any] = {
 
 
 def get_replication_info_lst():
-    global REPLICATION_INFO
-    return [f"{k}:{v}" for k, v in REPLICATION_INFO.items()]
+    global replication_info
+    return [f"{k}:{v}" for k, v in replication_info.items()]
 
 
 async def expire_key(store_key: str, exp_time: int):
@@ -121,11 +121,23 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
     writer.close()
 
 
+def build_replication_info(input_args: Namespace) -> None:
+    global replication_info
+    if input_args.replicaof == "master":
+        replication_info["role"] = "master"
+    else:
+        master_addr, master_port = input_args.replicaof.split(" ")
+        replication_info["role"] = "slave"
+
+
 async def run_server():
-    # print(get_replication_info_lst())
+    global replication_info
     parser = ArgumentParser("Redis Python")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--replicaof", type=str, default="master")
     input_args = parser.parse_args()
+    build_replication_info(input_args)
+
     server = await asyncio.start_server(handle_client, HOST, input_args.port)
     async with server:
         await server.serve_forever()
