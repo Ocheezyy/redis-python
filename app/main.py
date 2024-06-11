@@ -153,10 +153,16 @@ async def master_handshake(master_addr: str, master_port: int, slave_port: int):
         raise Exception(f"Failed to handshake with master (listen port declaration): {replconf_port_res}")
 
     # Send capabilities
-    master_writer.write(redis_encode(["REPLCONF", "capa", "psync2"]))
+    master_writer.write(redis_encode(["REPLCONF", "capa", "eof", "capa", "psync2"]))
     replconf_capa_res = await master_reader.read(1024)
     if replconf_capa_res != redis_encode("+OK"):
         raise Exception(f"Failed to handshake with master (capa declaration): {replconf_capa_res}")
+
+    # Send PSYNC
+    master_writer.write(redis_encode(["PSYNC", "?", "-1"]))
+    psync_res = await master_reader.read(1024)
+    if not psync_res.startswith(b"+FULLRESYNC "):
+        raise Exception(f"Failed to handshake with master (PSYNC): {psync_res}")
 
     master_writer.close()
 
