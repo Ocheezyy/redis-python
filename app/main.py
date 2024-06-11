@@ -63,6 +63,14 @@ def redis_replconf() -> bytes:
     return redis_encode("+OK")
 
 
+def redis_psync(req_arr: list[str]) -> bytes:
+    global replication_info
+    repl_id = req_arr[4]
+    repl_offset = req_arr[6]
+    if repl_id == "?" and repl_offset == "-1":
+        return redis_encode(f"+FULLRESYNC {replication_info['master_replid']} {replication_info['master_repl_offset']}")
+    return b""
+
 def redis_get(req_arr: list[str]) -> bytes:
     """Retrieve a value for a key in the redis store"""
     global MASTER_STORE
@@ -117,7 +125,7 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
         elif req_arr[2].lower() == "replconf":
             response = redis_replconf()
         elif req_arr[2].lower() == "psync":
-            response = b""
+            response = redis_psync(req_arr)
         else:
             return
 
