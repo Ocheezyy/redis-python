@@ -1,6 +1,6 @@
 import asyncio
 import socket
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 from argparse import ArgumentParser, Namespace
 
 HOST = "localhost"
@@ -28,6 +28,14 @@ def get_replication_info_lst():
 async def expire_key(store_key: str, exp_time: int):
     await asyncio.sleep(exp_time / 1000)
     MASTER_STORE.pop(store_key)
+
+
+def send_rdb() -> Tuple[str, bytes]:
+    empty_rdb_base_64 = "UkVESVMwMDEx+glyZWRpcy12ZXIFNy4yLjD6CnJlZGlzLWJpdHPAQPoFY3RpbWXCbQi8ZfoIdXNlZC1tZW3CsMQQAPoIYW9mLWJhc2XAAP/wbjv+wP9aog=="
+    empty_rdb_hex = "524544495330303131fa0972656469732d76657205372e322e30fa0a72656469732d62697473c040fa056374696d65c26d08bc65fa08757365642d6d656dc2b0c41000fa08616f662d62617365c000fff06e3bfec0ff5aa2"
+    rdb_content = bytes.fromhex(empty_rdb_hex)
+    return f"${len(rdb_content)}{CRLF}", rdb_content
+    # return f"${len(rdb_content)}{CRLF}{rdb_content}".encode()
 
 
 def redis_ping() -> bytes:
@@ -70,6 +78,7 @@ def redis_psync(req_arr: list[str]) -> bytes:
     if repl_id == "?" and repl_offset == "-1":
         return redis_encode(f"+FULLRESYNC {replication_info['master_replid']} {replication_info['master_repl_offset']}")
     return b""
+
 
 def redis_get(req_arr: list[str]) -> bytes:
     """Retrieve a value for a key in the redis store"""
@@ -114,23 +123,32 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
         response: bytes
         if req_arr[2].lower() == "ping":
             response = redis_ping()
+            writer.write(response)
         elif req_arr[2].lower() == "echo":
             response = redis_echo(req_arr)
+            writer.write(response)
         elif req_arr[2].lower() == "set":
             response = redis_set(req_arr)
+            writer.write(response)
         elif req_arr[2].lower() == "get":
             response = redis_get(req_arr)
+            writer.write(response)
         elif req_arr[2].lower() == "info":
             response = redis_info(req_arr)
+            writer.write(response)
         elif req_arr[2].lower() == "replconf":
             response = redis_replconf()
+            writer.write(response)
         elif req_arr[2].lower() == "psync":
             response = redis_psync(req_arr)
+            writer.write(response)
+            rdb_len, rdb_content = send_rdb()
+            writer.write(rdb_len.encode() + rdb_content)
         else:
             return
 
         print(f"response: {response}")
-        writer.write(response)
+
         await writer.drain()
     writer.close()
 
